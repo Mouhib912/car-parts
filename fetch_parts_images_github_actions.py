@@ -193,6 +193,35 @@ def search_ebay_image(name, attempt=1):
     return "", None
 
 
+# ── FALLBACK: BING IMAGE SEARCH ───────────────────────────────────────────────
+def search_bing_image(name, attempt=1):
+    """Fallback search using Bing Images when eBay fails or blocks."""
+    # Bing is less strict, but we still apply a small delay
+    wait_before_request()
+    
+    url = f"https://www.bing.com/images/search?q={quote('car part ' + name)}"
+    
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        
+        if resp.status_code != 200:
+            if attempt < RETRY_ATTEMPTS:
+                time.sleep(2)
+                return search_bing_image(name, attempt + 1)
+            return "", None
+            
+        m = re.search(r'murl&quot;:&quot;(http[^&]+?)&quot;', resp.text)
+        if m:
+            img_url = m.group(1)
+            data = download_image(img_url)
+            return img_url, data
+            
+    except Exception as e:
+        print(f"    [BING_ERROR] {type(e).__name__}: {e}")
+        
+    return "", None
+
+
 # ── IMAGE DOWNLOAD ────────────────────────────────────────────────────────────
 def download_image(url, attempt=1):
     """Download and process image with retry logic."""
@@ -224,6 +253,11 @@ def fetch_image_for_part(row_dict):
     """Worker function for thread pool."""
     name = row_dict["name"]
     img_url, img_data = search_ebay_image(name)
+    
+    # Fallback to Bing if eBay found nothing or was blocked
+    if not img_data:
+        img_url, img_data = search_bing_image(name)
+        
     status = "Found" if img_data else "Missing"
     
     return {

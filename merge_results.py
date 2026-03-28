@@ -94,12 +94,15 @@ def merge_excels(input_dir, output_file):
             # Copy image if exists
             if row in images_dict:
                 img = images_dict[row]
-                # Re-anchor the image to the new row
-                new_img = XLImage(img.ref)
-                new_img.width = img.width
-                new_img.height = img.height
-                final_ws.add_image(new_img, f"G{current_row}")
-                total_images += 1
+                # Re-anchor the image to the new row by regenerating it from byte data
+                try:
+                    new_img = XLImage(BytesIO(img._data()))
+                    new_img.width = img.width
+                    new_img.height = img.height
+                    final_ws.add_image(new_img, f"G{current_row}")
+                    total_images += 1
+                except Exception as e:
+                    print(f"Warning: Failed to copy image at row {row}: {e}")
             
             current_row += 1
         
