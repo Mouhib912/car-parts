@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Number of products per batch'
+        description: 'Number of products per batch (max 50 recommended to avoid matrix limit)'
         required: true
-        default: '200'
+        default: '50'
       total_products:
         description: 'Total number of products to process'
         required: true
-        default: '12000'
+        default: '12432'
 
 jobs:
   # Job to generate the matrix of batches

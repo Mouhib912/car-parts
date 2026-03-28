@@ -31,37 +31,43 @@ RETRY_ATTEMPTS     = 3                 # Retry failed requests
 IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS", "false").lower() == "true"
 
 if IS_GITHUB_ACTIONS:
-    # GitHub Actions: fresh IP per runner, but be polite to avoid batch-level bans
-    MAX_WORKERS = 1                    # Sequential within each batch runner
-    MIN_DELAY   = 10.0                  # Minimum wait between searches (seconds)
-    MAX_DELAY   = 15.0                  # Maximum wait between searches (seconds)
-    print("[ENV] Running in GitHub Actions — using conservative delays (3–7s)")
+    # GitHub Actions: fresh IP per runner
+    MAX_WORKERS = 1                    
+    MIN_DELAY   = 15.0                  # Minimum wait between searches (seconds)
+    MAX_DELAY   = 35.0                  # Maximum wait between searches (seconds)
+    print("[ENV] Running in GitHub Actions — using max stealth delays (15–35s)")
 else:
-    # Local: shared IP, keep it slow to avoid bans
-    MAX_WORKERS = 1                    # Single worker to be extra gentle
-    MIN_DELAY   = 10.0                  # Minimum wait between searches (seconds)
-    MAX_DELAY   = 15.0                  # Maximum wait between searches (seconds)
-    print("[ENV] Running locally — using safe delays (3–6s)")
+    # Local: shared IP
+    MAX_WORKERS = 1                    
+    MIN_DELAY   = 20.0                  # Minimum wait between searches (seconds)
+    MAX_DELAY   = 40.0                  # Maximum wait between searches (seconds)
+    print("[ENV] Running locally — using max stealth delays (20–40s)")
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Enhanced headers to avoid bot detection
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Cache-Control": "max-age=0",
-}
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1"
+]
+
+def get_random_headers():
+    return {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Cache-Control": "max-age=0",
+    }
 
 # Regex for eBay images
 EBAY_IMG_RE = re.compile(r"https://i\.ebayimg\.com/images/g/[^\"'\s<>]+\.(?:jpg|webp|png)")
@@ -143,7 +149,7 @@ def search_ebay_image(name, attempt=1):
     url = f"https://www.ebay.com/sch/i.html?_nkw={quote(name)}&_sacat=6030"
     
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=get_random_headers(), timeout=15)
         
         # Check for rate limiting or blocking
         if resp.status_code == 429:
@@ -202,7 +208,7 @@ def search_bing_image(name, attempt=1):
     url = f"https://www.bing.com/images/search?q={quote('car part ' + name)}"
     
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=get_random_headers(), timeout=15)
         
         if resp.status_code != 200:
             if attempt < RETRY_ATTEMPTS:
@@ -226,7 +232,7 @@ def search_bing_image(name, attempt=1):
 def download_image(url, attempt=1):
     """Download and process image with retry logic."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=get_random_headers(), timeout=15)
         if resp.status_code != 200:
             if attempt < RETRY_ATTEMPTS:
                 time.sleep(1)
