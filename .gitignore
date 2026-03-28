@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+results_batch_*.xlsx
+final_ebay_results.xlsx
+check_count.py
+ebay_scraper_workflow.yml
