@@ -1,0 +1,119 @@
+name: eBay Scraper Batch Processing
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of products per batch'
+        required: true
+        default: '200'
+      total_products:
+        description: 'Total number of products to process'
+        required: true
+        default: '12000'
+
+jobs:
+  # Job to generate the matrix of batches
+  setup-batches:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          BATCH_SIZE=${{ github.event.inputs.batch_size }}
+          TOTAL=${{ github.event.inputs.total_products }}
+          NUM_BATCHES=$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE ))
+          
+          # Generate a JSON array of batch indices
+          # Example: [{"start": 0, "end": 200}, {"start": 200, "end": 400}, ...]
+          MATRIX_JSON="["
+          for (( i=0; i<$NUM_BATCHES; i++ )); do
+            START=$(( i * BATCH_SIZE ))
+            END=$(( (i + 1) * BATCH_SIZE ))
+            if [ $END -gt $TOTAL ]; then END=$TOTAL; fi
+            
+            MATRIX_JSON="${MATRIX_JSON}{\"start\": $START, \"end\": $END}"
+            if [ $i -lt $((NUM_BATCHES - 1)) ]; then
+              MATRIX_JSON="${MATRIX_JSON},"
+            fi
+          done
+          MATRIX_JSON="${MATRIX_JSON}]"
+          
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+  # Job to run the scraper for each batch
+  scrape-batch:
+    needs: setup-batches
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: ${{ fromJson(needs.setup-batches.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests openpyxl Pillow
+
+      - name: Stagger Start (avoid simultaneous eBay hits)
+        run: |
+          DELAY=$(( RANDOM % 56 + 5 ))
+          echo "Waiting ${DELAY}s before starting to stagger parallel jobs..."
+          sleep $DELAY
+
+      - name: Run Scraper for Batch
+        run: |
+          python fetch_parts_images_github_actions.py --start-index ${{ matrix.batch.start }} --end-index ${{ matrix.batch.end }}
+
+      - name: Upload Batch Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results_batch_${{ matrix.batch.start }}_${{ matrix.batch.end }}
+          path: results_batch_${{ matrix.batch.start }}_${{ matrix.batch.end }}.xlsx
+          retention-days: 1
+
+  # Job to merge all batch results
+  merge-results:
+    needs: scrape-batch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl
+
+      - name: Download All Batch Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all_results
+          pattern: results_batch_*
+          merge-multiple: true
+
+      - name: Merge Results
+        run: |
+          python merge_results.py --input-dir all_results --output final_ebay_results.xlsx
+
+      - name: Upload Final Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: final_ebay_results
+          path: final_ebay_results.xlsx
