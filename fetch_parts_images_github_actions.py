@@ -89,8 +89,8 @@ def load_items(path, start_index=None, end_index=None):
     
     # Use English name when available, fall back to French Libellé
     def pick_name(row):
-        en = row["name_en"]
-        fr = row["name_fr"]
+        en = str(row["name_en"])
+        fr = str(row["name_fr"])
         if en and en.lower() != "nan":
             return en
         if fr and fr.lower() != "nan":
@@ -99,7 +99,7 @@ def load_items(path, start_index=None, end_index=None):
     
     df2["name"] = df2.apply(pick_name, axis=1)
     df2["name_source"] = df2.apply(
-        lambda r: "EN" if r["name_en"] and r["name_en"].lower() != "nan" else "FR", axis=1
+        lambda r: "EN" if str(r["name_en"]) and str(r["name_en"]).lower() != "nan" else "FR", axis=1
     )
     
     # Drop rows with no name at all
